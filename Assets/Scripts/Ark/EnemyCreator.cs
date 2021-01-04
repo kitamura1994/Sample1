@@ -12,6 +12,7 @@ public class EnemyCreator : MonoBehaviour
         StartCoroutine(CreateEnemy());
     }
 
+    //＊PENDING＊仮で実装（CSVを元にエネミーを作るようにする）
     IEnumerator CreateEnemy()
     {
         yield return new WaitForSeconds(interval);

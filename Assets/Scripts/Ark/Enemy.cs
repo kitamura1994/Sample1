@@ -63,6 +63,8 @@ public class Enemy : MonoBehaviour
     //消滅するときに呼び出す関数
     public event Action<GameObject> deathAction;
 
+    //ブロックしている駒
+    private GameObject blockFrame　=null;
     // Start is called before the first frame update
     virtual protected void Start()
     {
@@ -141,6 +143,22 @@ public class Enemy : MonoBehaviour
         {
             FrameDestroy();
         }
+    }
+
+    //誰がブロックしているか保持する
+    virtual public bool SetBlockFrame(GameObject frame)
+    {
+        if (blockFrame == null)
+        {
+            blockFrame = frame;
+            return true;
+        }
+            return false;
+    }
+
+    virtual public void RemoveBlockFrame()
+    {
+        blockFrame = null;
     }
 }
 

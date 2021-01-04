@@ -39,9 +39,12 @@ public class Friend : MonoBehaviour
 
     private bool isAttack = false;
 
+    private bool isRegistering = false;
+
     // Start is called before the first frame update
     void Start()
     {
+        //初期値を現在の値に入れる。
         cHp = hp;
         maxHp = hp;
         cAtk = atk;
@@ -54,6 +57,8 @@ public class Friend : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        //ブロックしている相手がいないなら攻撃をやめる
+        //＊PENDING＊攻撃範囲≠自分のサイズを実装する際に変更する
         if (blockList.Count == 0)
         {
             if (isAttack)
@@ -66,27 +71,44 @@ public class Friend : MonoBehaviour
 
     private void OnTriggerStay(Collider other)
     {
+
         if (other.CompareTag("Enemy"))
         {
-            if (blockList.Count < maxBlock)
+            //ブロックリストに空きがあるなら
+            if (cBlock < maxBlock)
             {
-                var enemy = other.gameObject;
+                GameObject enemy = other.gameObject;
 
-                if (!blockList.Contains(enemy))
+                //対象のエネミーをすでに登録していないなら
+                if (!blockList.Contains(enemy) && !isRegistering)
                 {
 
-                    blockList.Add(enemy);
-                    enemy.GetComponent<Enemy>().FrameStop();
-                    enemy.GetComponent<Enemy>().deathAction += BlockCountDecrement;
-                    cBlock = blockList.Count;
+                    Enemy enemyScript = enemy.GetComponent<Enemy>();
 
-                    if (blockList.Count > 0)
+                    if (enemyScript != null && enemyScript.SetBlockFrame(gameObject))
                     {
-                        if (!isAttack)
+                        isRegistering = true;
+                        //リストに登録
+                         blockList.Add(enemy);
+                        //対象の動きを止める
+                        enemyScript.FrameStop();
+                        //対象が消滅した時にブロックリストを減らすようにイベントを登録
+                         enemyScript.deathAction += BlockCountDecrement;
+                        //登録したオブジェクトが消滅している場合のNULLを削除
+                        blockList.RemoveAll(item => item == null);
+                        cBlock = blockList.Count;
+
+                        if (blockList.Count > 0)
                         {
-                            StartCoroutine(Attack());
-                            isAttack = true;
+                            if (!isAttack)
+                            {
+                                //攻撃開始
+                                //＊PENDING＊攻撃範囲≠自分のサイズを実装する際に変更する
+                                StartCoroutine(Attack());
+                                isAttack = true;
+                            }
                         }
+                        isRegistering = false;
                     }
                 }
             }
@@ -102,9 +124,17 @@ public class Friend : MonoBehaviour
 
     IEnumerator Attack()
     {
-        blockList[0].GetComponent<Enemy>().FrameDamaged(cAtk);
+        if (blockList.Count > 0)
+        {
+            blockList[0].GetComponent<Enemy>().FrameDamaged(cAtk);
+        }
+
         yield return new WaitForSeconds(cAtkInterval);
-        StartCoroutine(Attack());
+
+        if (blockList.Count > 0)
+        {
+            StartCoroutine(Attack());
+        }
     }
 
 }
