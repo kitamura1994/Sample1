@@ -1,37 +1,88 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.EventSystems;
 
 public class FriendIcon : MonoBehaviour
 {
     //配置するフレーム
-    public GameObject myFrame;
+    [SerializeField] GameObject myFrame;
+    [SerializeField] Text costCount;
 
-    InputManager inputMng;
+    Friend myFrameScript;
+    GameObject currentRayHitObject;
+    bool isSelected = false;
+
     private void Start()
     {
-        inputMng = GameObject.FindWithTag("InputManager").GetComponent<InputManager>();
     }
+    private void Update()
+    {
+        RayCastForTile();
+    }
+
+    private void RayCastForTile()
+    {
+        if (isSelected)
+        {
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            RaycastHit hit;
+            LayerMask layerMask = LayerMask.GetMask(new string[] { Commons.LAYER_TILE });
+            if (Physics.Raycast(ray, out hit, Mathf.Infinity, layerMask))
+            {
+                currentRayHitObject = hit.collider.gameObject;
+            }
+        }
+    }
+    private void RemoveCurrentRayHitObject()
+    {
+        currentRayHitObject = null;
+    }
+
     public void DragStart()
     {
         //レイキャストを有効にする
-        inputMng.isTile = true;
+        isSelected = true;
     }
 
     public void DragEnd()
     {
         //タイルを指していたら
-        if (inputMng.currentRayHitObject != null)
+        if (currentRayHitObject != null)
         {
-            //タイルの上にフレームを生成
-            var tilepos = inputMng.currentRayHitObject.transform.position;
-            Instantiate(myFrame, new Vector3(tilepos.x, 0.55f, tilepos.z), Quaternion.identity);
+            var tileScript = currentRayHitObject.GetComponent<Tile>();
 
-            //レイキャストを無効にする。
-            inputMng.isTile = false;
-            //レイキャストが指すオブジェクトを外す。
-            inputMng.RemoveCurrentRayHitObject();
+            if (Commons.MatchBitFlag((int)tileScript.GetHabitatType(), (int)myFrameScript.GetHabitat()))
+            {
+                //駒を配置可能なら
+                if (currentRayHitObject.GetComponent<Tile>().CheckPuttable())
+                {
+                    if (StageManager.stageManagerScript.PayCost(myFrameScript.GetCost())) 
+                    {
+                        Debug.Log(currentRayHitObject.GetComponent<Tile>().CheckPuttable());
+                        //タイルの上にフレームを生成
+                        var tilepos = currentRayHitObject.transform.position;
+                        var obj=Instantiate(myFrame, new Vector3(tilepos.x, Commons.FRAME_POS_Y, tilepos.z), Quaternion.identity);
+                        obj.GetComponent<Friend>().SetMyIconObject(gameObject);
+                        gameObject.SetActive(false);
+                        //レイキャストを無効にする。
+                        isSelected = false;
+                        //レイキャストが指すオブジェクトを外す。
+                        RemoveCurrentRayHitObject();
+                    } }
+            }
         }
+    }
+
+    public void SetCostCount(int cost)
+    {
+        costCount.text = cost.ToString();
+    }
+
+    public void SetMyFrame(GameObject frame)
+    {
+        myFrame = frame;
+        myFrameScript = myFrame.GetComponent<Friend>();
     }
 }

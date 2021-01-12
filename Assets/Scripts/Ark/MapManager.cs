@@ -4,31 +4,45 @@ using UnityEngine;
 
 public class MapManager : MonoBehaviour
 {
-    [SerializeField]
-    private ChildArray[] f_tiles;
+    public MapManager mapManagerScript = null;
+    [SerializeField] ChildArray[] f_tiles;
 
-    // Start is called before the first frame update
-    void Start()
+
+    //////////////////////// メソッド ////////////////////////
+    #region MonoBehaviour系
+    private void Awake()
     {
-
+        Initialize();
     }
+    #endregion
 
-    // Update is called once per frame
-    void Update()
+    #region 初期化系
+    /// <summary>
+    /// 初期化処理
+    /// </summary>
+    public void Initialize()
     {
-
+        if (mapManagerScript == null)
+        {
+            mapManagerScript = this;
+        }
+        else
+        {
+            Destroy(this.gameObject);
+        }
     }
+    #endregion
 
     public void InitTilesArray(int x, int z)
     {
         f_tiles = new ChildArray[x];
-        for(int i = 0; i < x; i++)
+        for (int i = 0; i < x; i++)
         {
             f_tiles[i] = new ChildArray(z);
         }
     }
 
-    public void AddTileToArray(GameObject tile,int x,int z)
+    public void AddTileToArray(GameObject tile, int x, int z)
     {
         if (f_tiles == null)
         {

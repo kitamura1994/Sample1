@@ -6,141 +6,269 @@ using UnityEngine.UI;
 public class Friend : MonoBehaviour
 {
 
-    ////////インスペクター表示////////
+    //////////////////////// メンバ ////////////////////////
+
+    #region インスペクター表示
     [Header("識別情報")]
-    public string frameName;
-    public Image icon;
-    public int cost;
-    public PUTTABLEPLACE puttablePlace;
-    [Multiline(2)] public string caption;
+    [SerializeField] string frameName;
+    [SerializeField] Image icon;
+    [SerializeField] int cost;
+    [SerializeField] float respawnTime;
+    [SerializeField] Commons.HABITAT habitat;
+    [Multiline(2)] [SerializeField] string caption;
 
     [Header("攻撃")]
-    public int atk;
-    public float atkInterval;
-    public GameObject atkArea;
-    public ATACK_TARGET atkTarget;
+    [SerializeField] int atk;
+    [SerializeField] float atkInterval;
+    [SerializeField] int targetCount;
+    [SerializeField] GameObject atkArea;
+    [SerializeField] Commons.HABITAT targetHabitat;
 
     [Header("防御")]
-    public int hp;
-    public int def;
-    public int block;
+    [SerializeField] int hp;
+    [SerializeField] int def;
+    [SerializeField] int block;
 
-    [Header("現在の状態")]
-    public int cHp;
-    public int maxHp;
-    public int cAtk;
-    public float cAtkInterval;
-    public int cDef;
-    public int cBlock;
-    public int maxBlock;
+    [Header("現在の情報")]
+    [SerializeField] int currentHp;
+    [SerializeField] int maxHp;
+    [SerializeField] int currentAtk;
+    [SerializeField] float currentAtkInterval;
+    [SerializeField] int currentTargetCount;
+    [SerializeField] int currentDef;
+    [SerializeField] int currentBlock;
+    [SerializeField] int maxBlock;
 
-    ////////プライベート変数////////
+    [Header("アタッチ用")]
+    [SerializeField] FriendBlock blockScript;
+    [SerializeField] FriendAttack attackScript;
+    [SerializeField] Slider hpSlider;
+    [SerializeField] Animator animator;
+    #endregion
+
+    #region インスペクター非表示
+    [SerializeField] List<GameObject> attackTarget = new List<GameObject>();
+    bool isAttackable = false;
+    bool isAttacking = false;
+    bool isAttacked = false;
+    bool isCooling = false;
+
     List<GameObject> blockList = new List<GameObject>();
+    GameObject myIcon;
+    #endregion
 
-    private bool isAttack = false;
+    //////////////////////// メソッド ////////////////////////
 
-    private bool isRegistering = false;
+    #region MonoBehaviour系
+    virtual protected void Awake()
+    {
+        Initialize();
 
-    // Start is called before the first frame update
-    void Start()
+        //子オブジェクトの初期化
+        blockScript.Initialize();
+        attackScript.Initialize();
+    }
+
+    virtual protected void Update()
+    {
+        FrameChangeStatus();
+        FrameAttack();
+        UpdateHpDisplay();
+    }
+    #endregion
+
+    #region 初期化系
+    /// <summary>
+    /// 初期化処理
+    /// </summary>
+    virtual protected void Initialize()
     {
         //初期値を現在の値に入れる。
-        cHp = hp;
+        currentHp = hp;
         maxHp = hp;
-        cAtk = atk;
-        cAtkInterval = atkInterval;
-        cDef = def;
-        cBlock = 0;
+        currentAtk = atk;
+        currentAtkInterval = atkInterval;
+        currentTargetCount = targetCount;
+        currentDef = def;
+        currentBlock = 0;
         maxBlock = block;
     }
+    #endregion
 
-    // Update is called once per frame
-    void Update()
+    #region 更新系
+    /// <summary>
+    /// 状態変更処理
+    /// </summary>
+    virtual protected void FrameChangeStatus()
     {
-        //ブロックしている相手がいないなら攻撃をやめる
-        //＊PENDING＊攻撃範囲≠自分のサイズを実装する際に変更する
-        if (blockList.Count == 0)
+        //isAttackable
+        if (!isAttackable)
         {
-            if (isAttack)
-            {
-                StopCoroutine(Attack());
-                isAttack = false;
-            }
+            if (attackTarget.Count > 0)
+                isAttackable = true;
+        }
+        else
+        {
+            if (attackTarget.Count <= 0)
+                isAttackable = false;
+        }
+
+        //isAttacking
+        if (isAttackable && !isCooling)
+            isAttacking = true;
+        else
+            isAttacking = false;
+    }
+
+    /// <summary>
+    /// 攻撃処理
+    /// </summary>
+    private void FrameAttack()
+    {
+        //攻撃ダメージ処理後は攻撃モーションが終わるまでフラグを変更しない
+        if (!isAttacked)
+        {
+            //攻撃アニメーション実施
+            animator.SetBool(Commons.ANIMATOR_ISATTACKING, isAttackable & isAttacking);
         }
     }
 
-    private void OnTriggerStay(Collider other)
+    /// <summary>
+    /// HP表示の更新
+    /// </summary>
+    virtual protected void UpdateHpDisplay()
     {
+        hpSlider.value = (float)currentHp / (float)maxHp;
+    }
+    #endregion
 
-        if (other.CompareTag("Enemy"))
+    #region Animation呼び出し系
+    /// <summary>
+    /// 攻撃ダメージ処理
+    /// </summary>
+    virtual public void Attaking()
+    {
+        //登録したオブジェクトが消滅している場合のNULLを削除
+        attackTarget.RemoveAll(item => item == null);
+        if (attackTarget.Count <= 0) return;
+
+        foreach (var target in attackTarget)
         {
-            //ブロックリストに空きがあるなら
-            if (cBlock < maxBlock)
-            {
-                GameObject enemy = other.gameObject;
+            target.GetComponent<Enemy>().FrameDamaged(currentAtk);
+        }
 
-                //対象のエネミーをすでに登録していないなら
-                if (!blockList.Contains(enemy) && !isRegistering)
-                {
+        isAttacked = true;
+    }
 
-                    Enemy enemyScript = enemy.GetComponent<Enemy>();
+    /// <summary>
+    /// 攻撃クールタイム処理
+    /// </summary>
+    virtual public IEnumerator CoolTimeCoroutine()
+    {
+        isCooling = true;
+        isAttacked = false;
+        yield return new WaitForSeconds(currentAtkInterval);
+        isCooling = false;
+    }
+    #endregion
 
-                    if (enemyScript != null && enemyScript.SetBlockFrame(gameObject))
-                    {
-                        isRegistering = true;
-                        //リストに登録
-                         blockList.Add(enemy);
-                        //対象の動きを止める
-                        enemyScript.FrameStop();
-                        //対象が消滅した時にブロックリストを減らすようにイベントを登録
-                         enemyScript.deathAction += BlockCountDecrement;
-                        //登録したオブジェクトが消滅している場合のNULLを削除
-                        blockList.RemoveAll(item => item == null);
-                        cBlock = blockList.Count;
+    #region 外部呼出し系
+    /// <summary>
+    /// 被ダメージ処理
+    /// </summary>
+    /// <param name="attackpoint">攻撃力</param>
+    virtual public void FrameDamaged(int attackpoint)
+    {
+        currentHp = currentHp - (attackpoint - currentDef);
 
-                        if (blockList.Count > 0)
-                        {
-                            if (!isAttack)
-                            {
-                                //攻撃開始
-                                //＊PENDING＊攻撃範囲≠自分のサイズを実装する際に変更する
-                                StartCoroutine(Attack());
-                                isAttack = true;
-                            }
-                        }
-                        isRegistering = false;
-                    }
-                }
-            }
-
+        if (currentHp <= 0)
+        {
+            FrameDestroy();
         }
     }
 
-    public void BlockCountDecrement(GameObject enemy)
+    /// <summary>
+    /// 消滅処理
+    /// </summary>
+    virtual public void FrameDestroy()
     {
-        blockList.Remove(enemy);
-        cBlock = blockList.Count;
+        //myIcon.SetActive(true);
+        Destroy(gameObject);
+    }
+    #endregion
+
+    #region Setter系
+    virtual public void SetCurrentBlock(int blockCunt)
+    {
+        currentBlock = blockCunt;
     }
 
-    IEnumerator Attack()
+    public void SetMyIconObject(GameObject icon)
     {
-        if (blockList.Count > 0)
-        {
-            blockList[0].GetComponent<Enemy>().FrameDamaged(cAtk);
-        }
-
-        yield return new WaitForSeconds(cAtkInterval);
-
-        if (blockList.Count > 0)
-        {
-            StartCoroutine(Attack());
-        }
+        myIcon = icon;
     }
+
+    #endregion
+
+    #region Getter系
+    public int GetMaxBlock()
+    {
+        return maxBlock;
+    }
+
+    public int GetCurrentAttack()
+    {
+        return currentAtk;
+    }
+
+    public float GetCurrentAttackInterval()
+    {
+        return currentAtkInterval;
+    }
+
+    public int GetCurrentTargetCount()
+    {
+        return currentTargetCount;
+    }
+
+    public Commons.HABITAT GetHabitat()
+    {
+        return habitat;
+    }
+
+    public Commons.HABITAT GetTargetHabitat()
+    {
+        return targetHabitat;
+    }
+
+    public List<GameObject> GetAttackTarget()
+    {
+        return attackTarget;
+    }
+
+    public List<GameObject> GetBlockList()
+    {
+        return blockList;
+    }
+
+    public int GetCost()
+    {
+        return cost;
+    }
+
+    public Image GetIcon()
+    {
+        return icon;
+    }
+    #endregion
+
+
+
+
+
+
+
+
 
 }
 
-public enum PUTTABLEPLACE
-{
-    ROAD,
-    SECONDFLOR,
-}

@@ -4,6 +4,7 @@ using UnityEngine;
 
 public class Goal : MonoBehaviour
 {
+    [SerializeField] StageManager stageManager;
     void OnTriggerEnter(Collider other)
     {
         //オブジェクトが"Enemy"なら
@@ -11,6 +12,11 @@ public class Goal : MonoBehaviour
         {
             //オブジェクトの削除処理を実行
             other.gameObject.GetComponent<Enemy>().FrameDestroy();
+
+            //通過したことを報告
+            stageManager.DecreaseDurableCount();
+            stageManager.IncreasePassedEnemyCount();
+
         }
     }
 }

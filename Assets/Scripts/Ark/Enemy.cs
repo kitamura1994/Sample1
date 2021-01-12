@@ -11,177 +11,309 @@ using System;
 public class Enemy : MonoBehaviour
 {
 
-    ////////インスペクター表示////////
+    //////////////////////// メンバ ////////////////////////
+
+    #region インスペクター表示
     [Header("識別情報")]
-    public string frameName;
-    public Image icon;
-    public CATEGORY category;
-    [Multiline(2)] public string caption;
+    [SerializeField] string frameName;
+    [SerializeField] Image icon;
+    [SerializeField] Commons.CATEGORY category;
+    [SerializeField] Commons.HABITAT habitat;
+    [Multiline(2)] [SerializeField] string caption;
 
     [Header("攻撃")]
-    public int atk;
-    public float atkInterval;
-    public bool isMyCollider;
-    public ATACK_TARGET atkTarget;
+    [SerializeField] int atk;
+    [SerializeField] float atkInterval;
+    [SerializeField] int targetCount;
+    [SerializeField] Commons.HABITAT targetHabitat;
 
     [Header("防御")]
-    public int hp;
-    public int def;
+    [SerializeField] int hp;
+    [SerializeField] int def;
 
     [Header("移動")]
-    public float spd;
-    public ROUTE_TYPE routeType;
+    [SerializeField] float spd;
 
     [Header("現在の状態")]
-    public float cSpd;
-    public int cHp;
-    public int cAtk;
-    public int cDef;
+    [SerializeField] float currentSpd;
+    [SerializeField] int currentHp;
+    [SerializeField] int maxHp;
+    [SerializeField] int currentAtk;
+    [SerializeField] float currentAtkInterval;
+    [SerializeField] int currentTargetCount;
+    [SerializeField] int currentDef;
 
     [Header("経路")]
     //＊PENDING＊EnemyCreatorが生成時に中継地と目的地を渡すようにする
     //中継地
-    public List<Vector2> wayPoints;
+    [SerializeField] List<Vector2> wayPoints;
     //目的地
-    public Vector2 destination;
+    [SerializeField] Vector2 destination;
 
+    [Header("アタッチ用")]
+    [SerializeField] Slider hpSlider;
+    [SerializeField] EnemyAttack enemyAttackScript;
+    [SerializeField] Animator animator;
+    #endregion
 
-    ////////プライベート定数////////
-    //Y座標固定値
-    private static float STATIC_Y = 0.55f;
+    #region インスペクター非表示
+    private Vector3 currentDestination; //現在の目的地
+    private int wayPointsCount = 0;//中継地点の数
+    private int passedWPC = 0; //現在通過した中継地点の数
+    [SerializeField] private bool isMoving = true;
+    private GameObject blockFrame = null;//ブロックしている駒
+    [SerializeField] List<GameObject> attackTarget = new List<GameObject>();
 
-    ////////プライベート変数////////
-    //現在の目的地
-    private Vector3 currentDestination;
-    //中継地点の数
-    private int wayPointsCount = 0;
-    //現在通過した中継地点の数
-    private int passedWPC = 0;
+    bool isAttackable = false;
+    bool isAttacking = false;
+    bool isAttacked = false;
+    bool isCooling = false;
 
-    private bool isMoving = true;
+    #endregion
 
-    //消滅するときに呼び出す関数
-    public event Action<GameObject> deathAction;
+    //////////////////////// メソッド ////////////////////////
 
-    //ブロックしている駒
-    private GameObject blockFrame　=null;
-    // Start is called before the first frame update
+    #region MonoBehaviour系
     virtual protected void Start()
     {
+        Initialize();
+
+        //子オブジェクトの初期化
+        enemyAttackScript.Initialize();
+    }
+
+    virtual protected void Update()
+    {
+        FrameChangeStatus();
+        FrameAttack();
+        FrameMove();
+        UpdateHpDisplay();
+    }
+    #endregion
+
+    #region 初期化系
+    /// <summary>
+    /// 初期化処理
+    /// </summary>
+    virtual protected void Initialize()
+    {
         //初期値を現在の値に入れる。
-        cSpd = spd;
-        cHp = hp;
-        cAtk = atk;
-        cDef = def;
+        currentSpd = spd;
+        currentHp = hp;
+        maxHp = hp;
+        currentAtk = atk;
+        currentAtkInterval = atkInterval;
+        currentTargetCount = targetCount;
+        currentDef = def;
 
         //目的地を設定
         if (wayPoints.Count > 0)
         {
-            currentDestination = new Vector3(wayPoints[passedWPC].x, STATIC_Y, wayPoints[passedWPC].y);
+            currentDestination = new Vector3(wayPoints[passedWPC].x, Commons.FRAME_POS_Y, wayPoints[passedWPC].y);
             wayPointsCount = wayPoints.Count;
         }
         else
         {
-            currentDestination = new Vector3(destination.x, STATIC_Y, destination.y);
+            currentDestination = new Vector3(destination.x, Commons.FRAME_POS_Y, destination.y);
+        }
+
+    }
+    #endregion
+
+    #region 更新系
+    /// <summary>
+    /// 状態変更処理
+    /// </summary>
+    virtual protected void FrameChangeStatus()
+    {
+        //isAttackable
+        if (!isAttackable)
+        {
+            if (attackTarget.Count > 0)
+                isAttackable = true;
+        }
+        else
+        {
+            if (attackTarget.Count <= 0)
+                isAttackable = false;
+        }
+
+        //isAttacking
+        if (isAttackable && !isCooling)
+            isAttacking = true;
+        else
+            isAttacking = false;
+
+        //isMoving
+        isMoving = true;
+        if (blockFrame != null) isMoving = false;
+        if (isAttacked || isAttacking) isMoving = false;
+
+    }
+
+    /// <summary>
+    /// 攻撃処理
+    /// </summary>
+    private void FrameAttack()
+    {
+        //攻撃ダメージ処理後は攻撃モーションが終わるまでフラグを変更しない
+        if (!isAttacked)
+        {
+            //攻撃アニメーション実施
+            animator.SetBool(Commons.ANIMATOR_ISATTACKING, isAttackable & isAttacking);
         }
     }
 
-    // Update is called once per frame
-    virtual protected void Update()
-    {
-        //動ける状態なら
-        if (isMoving) FrameMove();
-    }
-
-    //移動処理
+    /// <summary>
+    /// 移動処理
+    /// </summary>
     virtual protected void FrameMove()
     {
-        //現在の目的地に到達したら、目的地を次の目的地に変更
-        if (transform.position == currentDestination)
+        if (isMoving)
         {
-            if (passedWPC < wayPointsCount - 1)
+            //現在の目的地に到達したら、目的地を次の目的地に変更
+            if (transform.position == currentDestination)
             {
-                //中継地点を全て通過していないなら次の中継地へ
-                passedWPC++;
-                currentDestination = new Vector3(wayPoints[passedWPC].x, STATIC_Y, wayPoints[passedWPC].y);
+                if (passedWPC < wayPointsCount - 1)
+                {
+                    //中継地点を全て通過していないなら次の中継地へ
+                    passedWPC++;
+                    currentDestination = new Vector3(wayPoints[passedWPC].x, Commons.FRAME_POS_Y, wayPoints[passedWPC].y);
+                }
+                else
+                {
+                    //中継地を全て過ぎたなら目的地へ
+                    currentDestination = new Vector3(destination.x, Commons.FRAME_POS_Y, destination.y);
+                }
+                //＊PENDING＊道をふさぐ障害物出す時はAstar実装して中継地点リストを更新する
             }
-            else
-            {
-                //中継地を全て過ぎたなら目的地へ
-                currentDestination = new Vector3(destination.x, STATIC_Y, destination.y);
-            }
-            //＊PENDING＊道をふさぐ障害物出す時はAstar実装して中継地点リストを更新する
+            transform.position = Vector3.MoveTowards(transform.position, new Vector3(currentDestination.x, Commons.FRAME_POS_Y, currentDestination.z), spd * Time.deltaTime);
         }
-        transform.position = Vector3.MoveTowards(transform.position, new Vector3(currentDestination.x, STATIC_Y, currentDestination.z), spd * Time.deltaTime);
+
+        animator.SetBool(Commons.ANIMATOR_ISMOVING, isMoving);
     }
 
-    //自身を消滅させる
-    virtual public void FrameDestroy()
+    /// <summary>
+    /// HP表示の更新
+    /// </summary>
+    virtual protected void UpdateHpDisplay()
     {
-        deathAction?.Invoke(gameObject);
-        Destroy(gameObject);
+        hpSlider.value = (float)currentHp / (float)maxHp;
     }
+    #endregion
 
-    //移動を許可しない
-    virtual public void FrameStop()
+    #region Animation呼び出し系
+    /// <summary>
+    /// 攻撃ダメージ処理
+    /// </summary>
+    virtual public void Attaking()
     {
-        isMoving = false;
+        //登録したオブジェクトが消滅している場合のNULLを削除
+        attackTarget.RemoveAll(item => item == null);
+        if (attackTarget.Count <= 0) return;
+
+        foreach (var target in attackTarget)
+        {
+            target.GetComponent<Friend>().FrameDamaged(currentAtk);
+        }
+
+        isAttacked = true;
     }
 
-    //移動をを許可する
-    virtual public void FrameWalk()
+    /// <summary>
+    /// 攻撃クールタイム処理
+    /// </summary>
+    virtual public IEnumerator CoolTimeCoroutine()
     {
-        isMoving = true;
+        isCooling = true;
+        isAttacked = false;
+        yield return new WaitForSeconds(currentAtkInterval);
+        isCooling = false;
     }
+    #endregion
 
-    //ダメージ処理
+    #region 外部呼出し系
+    /// <summary>
+    /// 被ダメージ処理
+    /// </summary>
+    /// <param name="attackpoint">攻撃力</param>
     virtual public void FrameDamaged(int attackpoint)
     {
-        cHp = cHp - (attackpoint - cDef);
+        currentHp = currentHp - (attackpoint - currentDef);
 
-        if (cHp <= 0)
+        if (currentHp <= 0)
         {
+            StageManager.stageManagerScript.IncreaseDestroyedEnemyCount();
             FrameDestroy();
         }
     }
 
-    //誰がブロックしているか保持する
-    virtual public bool SetBlockFrame(GameObject frame)
+    /// <summary>
+    /// 消滅処理
+    /// </summary>
+    virtual public void FrameDestroy()
+    {
+        Destroy(gameObject);
+    }
+
+    /// <summary>
+    /// ブロックするオブジェクトの登録
+    /// </summary>
+    /// <param name="frame">ブロックするオブジェクト</param>
+    /// <returns>登録可否</returns>
+    public bool RegisterBlockFrame(GameObject frame)
     {
         if (blockFrame == null)
         {
             blockFrame = frame;
             return true;
         }
-            return false;
+        return false;
     }
-
-    virtual public void RemoveBlockFrame()
+    #endregion
+    #region Setter系
+    public void SetDestination(Vector2 destination)
     {
-        blockFrame = null;
+        this.destination = destination;
     }
+
+    public void SetWayPoints(List<Vector2> wayPoints)
+    {
+        this.wayPoints = wayPoints;
+    }
+    #endregion
+
+    #region Getter系
+    public int GetCurrentAttack()
+    {
+        return currentAtk;
+    }
+
+    public float GetCurrentAttackInterval()
+    {
+        return currentAtkInterval;
+    }
+
+    public int GetCurrentTargetCount()
+    {
+        return currentTargetCount;
+    }
+
+    public Commons.HABITAT GetHabitat()
+    {
+        return habitat;
+    }
+
+    public Commons.HABITAT GetTargetHabitat()
+    {
+        return targetHabitat;
+    }
+
+    public List<GameObject> GetAttackTarget()
+    {
+        return attackTarget;
+    }
+    #endregion
 }
 
 
-//移動手段
-public enum ROUTE_TYPE
-{
-    ROAD,   //道を歩く
-    SKY,    //空を飛ぶ
-}
-
-//攻撃対象
-public enum ATACK_TARGET
-{
-    ROAD,   //下の相手だけ
-    SKY,    //上の相手だけ
-    BOTH,   //両方
-}
-
-//カテゴリー
-public enum CATEGORY
-{
-    HUMAN,      //人間
-    ROBOT,      //ロボット
-    CREATURE,   //クリーチャー
-}

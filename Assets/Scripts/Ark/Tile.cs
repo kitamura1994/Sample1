@@ -4,17 +4,30 @@ using UnityEngine;
 
 public class Tile : MonoBehaviour
 {
+    [SerializeField] Commons.HABITAT habitatType = Commons.HABITAT.ROAD;
+    [SerializeField] GameObject standingFrame;
 
-    public bool isEnterable = true;
-    InputManager inputMng;
-
-    private void Start()
+    public bool CheckPuttable()
     {
-        inputMng = GameObject.FindWithTag("InputManager").GetComponent<InputManager>();
+        if (standingFrame == null)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
     }
-    public void DragEnd_PUTFRAME()
+    public Commons.HABITAT GetHabitatType()
     {
+        return habitatType;
+    }
 
+    public void SetStandingFrame(GameObject frame)
+    {
+        standingFrame = frame;
     }
 
 }
+
+

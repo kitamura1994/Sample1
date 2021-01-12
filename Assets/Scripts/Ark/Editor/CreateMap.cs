@@ -4,10 +4,12 @@ using UnityEngine;
 public class CreateMap : EditorWindow
 {
     //生成するマップのサイズ
-    public int f_xInt = 1;
-    public int f_zInt = 1;
+    int f_xInt = 1;
+    int f_zInt = 1;
 
-    public GameObject tileObject;
+    GameObject tileObject;
+
+    bool WithCameraPos = false;
 
     // Editorメニューに "CreateMap" というメニュー項目を追加
     [MenuItem("Editor/CreateMap")]
@@ -25,11 +27,15 @@ public class CreateMap : EditorWindow
         f_zInt = EditorGUILayout.IntSlider("size z", f_zInt, 1, f_xInt);
         EditorGUILayout.Space();
 
+        //カメラの位置調整するか否か
+        WithCameraPos = EditorGUILayout.Toggle("カメラ調整", WithCameraPos);
+        EditorGUILayout.Space();
+
         //マップ用タイルの指定
         tileObject = (GameObject)EditorGUILayout.ObjectField(tileObject, typeof(GameObject), true);
 
         //生成ボタン
-        if (GUI.Button(new Rect(10.0f, 100.0f, 120.0f, 20.0f), "Create Map"))
+        if (GUI.Button(new Rect(10.0f, 130.0f, 120.0f, 20.0f), "Create Map"))
         {
             //タイル用のオブジェクトが使用されていなければ終了
             if (tileObject == null)
@@ -81,25 +87,28 @@ public class CreateMap : EditorWindow
             }
 
             //カメラの位置調整
-            var cam = Camera.main;
-            //原点に最初のタイルの中心があるため、半個分マイナス
-            float xpos = (f_xInt / 2.0f) - 0.5f;
-            //カメラの視野角が60度なので1:2:√3(×1.1は端を見せるため)
-            float ypos = (Mathf.Sqrt(3.0f) * f_xInt / 2.0f) * 1.2f;
-            //原点に最初のタイルの中心があるため、半個分マイナス
-            float zpos = (f_zInt / 2.0f) - 0.5f;
-            cam.transform.position = new Vector3(xpos, ypos, zpos);
+            if (WithCameraPos)
+            {
+                var cam = Camera.main;
+                //原点に最初のタイルの中心があるため、半個分マイナス
+                float xpos = (f_xInt / 2.0f) - 0.5f;
+                //カメラの視野角が60度なので1:2:√3(×1.1は端を見せるため)
+                float ypos = (Mathf.Sqrt(3.0f) * f_xInt / 2.0f) * 1.2f;
+                //原点に最初のタイルの中心があるため、半個分マイナス
+                float zpos = (f_zInt / 2.0f) - 0.5f;
+                cam.transform.position = new Vector3(xpos, ypos, zpos);
 
-            //カメラの回転調整
-            cam.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+                //カメラの回転調整
+                cam.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
 
-            //マップの中心を中心にカメラを公転
-            cam.transform.RotateAround(new Vector3(xpos, 0.0f, zpos), Vector3.left, 30.0f);
+                //マップの中心を中心にカメラを公転
+                cam.transform.RotateAround(new Vector3(xpos, 0.0f, zpos), Vector3.left, 30.0f);
+            }
 
         }
 
         //削除ボタン
-        if (GUI.Button(new Rect(10.0f, 130.0f, 120.0f, 20.0f), "Delete Map"))
+        if (GUI.Button(new Rect(10.0f, 160.0f, 120.0f, 20.0f), "Delete Map"))
         {
             var map = GameObject.Find("Map");
             if (map != null)
